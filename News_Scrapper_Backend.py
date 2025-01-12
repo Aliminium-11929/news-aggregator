@@ -17,7 +17,7 @@ load_dotenv()
 google_gemini_api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
 if not google_gemini_api_key:
     raise ValueError("Google Gemini API key not set. Check your .env file.")
-feed_url = os.getenv("FEED_URL")
+feed_url = "https://almanar.com.lb/rss"
 feed = feedparser.parse(feed_url)
 
 Arr=["","","","",""]
