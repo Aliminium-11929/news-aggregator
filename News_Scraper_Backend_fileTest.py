@@ -8,9 +8,8 @@ import feedparser
 feed_url = "https://almanar.com.lb/rss"
 feed = feedparser.parse(feed_url)
 
-Arr=["","","","",""]
 
-def threaded_get_feed(entry,i):
+def threaded_get_feed(entry,Arr,i):
     try:
         title = entry.title
         link = entry.link
@@ -65,10 +64,11 @@ def gemini_summary(prompt):
         return None
 
 def get_feed():
+    Arr=["","","","",""]
     i=0
     threads = []
     for i, entry in enumerate(feed.entries[:5]):
-        thread = threading.Thread(target=threaded_get_feed, args=(entry, i))
+        thread = threading.Thread(target=threaded_get_feed, args=(entry, Arr, i))
         threads.append(thread)
         thread.start()
     # Wait for all threads to finish
