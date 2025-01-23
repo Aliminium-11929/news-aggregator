@@ -13,6 +13,9 @@ from deep_translator import GoogleTranslator
 from datetime import datetime, timezone
 import os
 import time
+from dateutil import parser
+import pandas as pd
+
 
 #Dictionary to help in translating supproted languages
 ISO_language={
@@ -46,6 +49,10 @@ content_loc={
     "aljadeed":("div","article-content"),
 }
 
+def process_time(input_time:datetime) -> str:
+    dt_object = parser.parse(input_time)
+    output_date = dt_object.strftime("%a, %d %b %Y %H:%M:%S +0000")
+    return output_date
 
 #Translates the given text into the target language using deep-translator
 def translate_text(text: str, target_language: str) -> str:
@@ -63,18 +70,23 @@ def thread_get_content(link:str, A:dict, Arr:list[dict], i:int, lang:str, src:st
         if not article_content:
             output_text=(f"No content to be displayed.")
             A['content']=translate_text(output_text,ISO_language[lang])
+            A['summary']=translate_text(f"Unavailable",ISO_language[lang])
             Arr[i]=A
             return
         text = article_content.get_text(strip=True, separator="\n")
         if text:
+            A['content']=text
             #Gemini call to summarize the content of the article
             summary = gemini_call("summary",lang,text)
             if summary:
-                A['content']=summary
-                Arr[i]=A
+                A['summary']=summary
+            else:
+                A['summary']=translate_text(f"Unavailable",ISO_language[lang])
+            Arr[i]=A
         else:
             output_text=(f"No content to be displayed.")
             A['content']=translate_text(output_text,ISO_language[lang])
+            A['summary']=translate_text(f"Unavailable",ISO_language[lang])
             Arr[i]=A
     except Exception as e:
         #Set link and other values as N/A where they will be filtered out later on, as in not displayed in the final result
@@ -84,19 +96,22 @@ def thread_get_content(link:str, A:dict, Arr:list[dict], i:int, lang:str, src:st
             "link": "N/A",
             "published": "N/A",
             "content": translate_text(f"An error occurred: {e}",ISO_language[lang]),
+            "summary": translate_text(f"Unavailable",ISO_language[lang]),
         }
 #In case RSS feed exists, we call this method to populate our Array "Arr" with the article "A" at index i
-def threaded_get_feed(entry, Arr: list[dict], i: int, lang: str, src: str):
+def threaded_get_feed(entry, Arr: list[dict], i: int, lang: str, src: str, already_exists:set):
     try:
         lang=lang.lower()
         title = entry.title
         link = entry.link
-        published = entry.published
+        if link in already_exists:
+            return
+        published = process_time(entry.published)
         A={}
         A['title']=translate_text(title,ISO_language[lang])
         A['link']=link
         #Hard coded, will be fixed once we create a universal standardized time format using dateutil
-        A['published']=published.replace("GMT","+0000")
+        A['published']=published
         thread_get_content(link,A,Arr,i,lang,src)
     #Error to auto-filter articles that experienced an error...
     except Exception as e:
@@ -105,6 +120,7 @@ def threaded_get_feed(entry, Arr: list[dict], i: int, lang: str, src: str):
             "link": "N/A",
             "published": "N/A",
             "content": translate_text(f"An error occurred: {e}",ISO_language[lang]),
+            "summary": translate_text(f"Unavailable",ISO_language[lang]),
         }
     
 # Google Gemini query function
@@ -139,7 +155,7 @@ def gemini_call(cmd: str, language: str, text: str) -> str:
         print("Error", f"An error occurred: {e}")
         return None
     
-def get_feed(lang: str, src: str, article_count: int):
+def get_feed(lang: str, src: str, article_count: int, already_exists:set, memory: list):
     # Cap max amount of articles to 14 retrieved articles in a single call, as we realistically cant get more from a single RSS
     if article_count>14:
         article_count=14
@@ -149,7 +165,7 @@ def get_feed(lang: str, src: str, article_count: int):
     Arr=[{} for i in range(article_count)]
     #Handle non-RSS seperately
     if src not in rss_links:
-        fetch_articles(non_rss_links[src], Arr, lang, src, article_count)
+        fetch_articles(non_rss_links[src], Arr, lang, src, article_count, already_exists, memory)
         return
     feed_url = rss_links[src]
     feed = feedparser.parse(feed_url)
@@ -157,7 +173,7 @@ def get_feed(lang: str, src: str, article_count: int):
     threads = []
     #Start a thread for each article as we populate the array, since we are accessing only a single index at max from all threads, it should be threadsafe
     for i, entry in enumerate(feed.entries[:article_count]):
-        thread = threading.Thread(target=threaded_get_feed, args=(entry, Arr, i, lang, src))
+        thread = threading.Thread(target=threaded_get_feed, args=(entry, Arr, i, lang, src, already_exists))
         threads.append(thread)
         thread.start()
     # Wait for all threads to finish as to not preemptively use a semi-complete or empty Arr to populate our CSV file
@@ -165,13 +181,9 @@ def get_feed(lang: str, src: str, article_count: int):
         thread.join()
     
     article_Dict[src]=Arr
-    createCSV(src)
+    createCSV(src, already_exists, memory)
 
-#Source being the name, and not the link, of the news organization, writes a CSV file of the total news sofar of a given news source
-def createCSV(source: str):
-    #Array we will use to store the combination of all articles, old and new, in order to write to the CSV
-    data_array = []
-    #Set to check unique links as not to write the same news article twice into the CSV file
+def get_exists(source:str, data_array:list):
     already_exists=set()
     #Check if file initially exists
     name = source+".csv"
@@ -181,7 +193,7 @@ def createCSV(source: str):
             filler=""
     #Read from the CSV file to get the new "Overall" feed, including old and new
     with open(name, "r" , encoding = 'utf-8') as f:
-        reader = csv.reader(f, delimiter='Ξ')  
+        reader = csv.reader(f, delimiter=',')  
         i=0
         for row in reader:
             i+=1
@@ -193,19 +205,33 @@ def createCSV(source: str):
                 "title": row[0],
                 "link": row[1],
                 "published": row[2],
-                "content": row[3]
+                "content": row[3],
+                "summary": row[4]
             }
             #data_array is our total articles, the array we will use to write to the CSV file the total articles.
             data_array.append(entry)
+    return already_exists
+
+def standardize_csv(src:str,delimiter:chr):
+    name="preprocessed"+src+".csv"
+    df = pd.read_csv(name, sep=delimiter, engine='python')
+    df.to_csv(src+'.csv', index=False, quoting=1)
+    os.remove(name)
+
+
+#Source being the name, and not the link, of the news organization, writes a CSV file of the total news sofar of a given news source
+def createCSV(source: str,already_exists:set, data_array:list):
     #Write to CSV file, the new and the old data
+    name = "preprocessed"+source+".csv"
     with open(name,'w', encoding='utf-8') as f:
-        fields=['title','link','published','content']
+        fields=['title','link','published','content','summary']
         csv_writer=csv.DictWriter(f,fieldnames=fields,delimiter='Ξ')
         csv_writer.writeheader()
         #Add the articles found for a given source into the total data_array
         for article in article_Dict[source]:
-            if article["link"] not in already_exists and article["link"] != "N/A":
+            if article and article["link"] != "":
                 data_array.append(article)
+                already_exists.add(article["link"])
         #sort the array
         sorted_data = sorted(
             data_array,
@@ -218,16 +244,21 @@ def createCSV(source: str):
     #Write the data to the CSV file.
         for article in sorted_data:
             csv_writer.writerow(article)
+    standardize_csv(source,'Ξ')
+    
 #Helper function in order to allow threading when accessing and organizing articles
 def fetch_helper(arr: list[dict], i:int, article, lang:str, src:str):
     #Currently hard-coded time fixing, can be made into a global function by using datautil library.
-    parsed_date = datetime.strptime(article["date"], "%a %d %b %Y - %I:%M:%S %p")
-    correctFormat = parsed_date.strftime("%a, %d %b %Y %H:%M:%S +0000")
+    correctFormat = process_time(article["date"])
     thread_get_content(article["websiteUrl"],{},arr,i,lang,src)
-    arr[i]=({"title": article["name"], "link": article["websiteUrl"], "published" : correctFormat, "content":arr[i]["content"]})
+    arr[i]=({"title": article["name"],
+             "link": article["websiteUrl"],
+             "published" : correctFormat,
+             "content":arr[i]["content"],
+             "summary":arr[i]["summary"]})
     
 # Function to fetch and process the data
-def fetch_articles(url:str, Arr:list[dict], lang:str, src:str, article_count:int):
+def fetch_articles(url:str, Arr:list[dict], lang:str, src:str, article_count:int, already_exists:set,memory:list):
     try:
         # Send a GET request to the API
         response = requests.get(url)
@@ -243,13 +274,15 @@ def fetch_articles(url:str, Arr:list[dict], lang:str, src:str, article_count:int
         for i, article in enumerate(articles):
             if i>=article_count:
                 break
+            if article["websiteUrl"] in already_exists:
+                continue
             thread = threading.Thread(target=fetch_helper, args=(Arr, i, article, lang, src))
             threads.append(thread)
             thread.start()
         for thread in threads:
             thread.join()
         article_Dict[src]=Arr
-        createCSV(src)
+        createCSV(src,already_exists,memory)
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
 
@@ -258,17 +291,21 @@ def get_user_input():
     global x
     x=""
     while not stop_event.is_set():
-        user_input = input("Enter a value for x (or 'n' to stop): ").strip()
+        user_input = input("Enter \"n\" at any time to stop at the next cycle.\n").strip()
         x = user_input
         if x == "n":
             break
+    print("Program has been shut down.")
 #A method that will help in creating a seperate thread fro each news source
 def auto_get_feed(language: str, source: str, article_count: int, refresh_timestamp):
     i= 0
+    memory=[]
+    already_exists=get_exists(source, memory)
     while x!="n":
         i+= 1
         print("Cycle "+str(i)+" for: "+ source)
-        get_feed(language,source,article_count)
+        get_feed(language, source, article_count, already_exists, memory)
+        print("Done: Cycle "+str(i)+" for: "+ source)
         time.sleep(refresh_timestamp)
 #A function that starts the input termination ability and the thread for each news source, where referesh_timestamp is how many seconds do we wait before retrieving the feed.
 def start(lang:str, source:list[str], article_count:int, refresh_timestamp:int):
@@ -284,4 +321,4 @@ def start(lang:str, source:list[str], article_count:int, refresh_timestamp:int):
 sourceArr=["almanar","aljadeed","mtv"]
 language = "arabic"
 stop_event = threading.Event()
-start(language,sourceArr,10,180)
+start(language,sourceArr,10,30)
