@@ -28,60 +28,6 @@ class UserPreferences(BaseModel):
         description="Preferred language for reading news."
     )
 
-class User(BaseModel):
-    """
-    Represents a user in the system.
-    
-    Attributes:
-        id: Unique identifier for the user.
-        email: Email address used for contact and authentication.
-        preferences: User preferences, including source subscriptions and language.
-    """
-    id: UUID = Field(
-        default_factory=uuid4,
-        description="Unique identifier for the user (UUID)."
-    )
-    email: EmailStr = Field(
-        ...,
-        description="User's email address."
-    )
-    preferences: UserPreferences = Field(
-        default_factory=UserPreferences,
-        description="User's saved preferences (sources followed, language)."
-    )
-
-class Source(BaseModel):
-    """
-    Represents a source from which articles can be collected.
-    
-    Attributes:
-        id: Unique identifier for the source (UUID).
-        name: Display name of the source.
-        url: List of URLs associated with the source (e.g., homepage, RSS feed).
-        content_location: Div location of the content of articles on this source.
-        has_rss: Determines the availability of an rss feed from this source.
-    """
-    id: UUID = Field(
-        default_factory=uuid4,
-        description="Unique identifier for the source (UUID)."
-    )
-    name: str = Field(
-        ...,
-        description="Display name of the source (e.g., 'Daily Star Lebanon')."
-    )
-    url: str = Field(
-        ...,
-        description="URL (homepage or RSS feed) associated with this source."
-    )
-    content_location: tuple = Field(
-        ...,
-        description="Div location of the content of articles on this source."
-    )
-    has_rss: bool = Field(
-        ...,
-        description="Determines the availability of an rss feed from this source."
-    )
-
 class Article(BaseModel):
     """
     Represents a single article fetched from a given source.
@@ -122,6 +68,61 @@ class Article(BaseModel):
     language: Language = Field(
         Language.UNKNOWN,
         description="Language of the article; defaults to UNKNOWN."
+    )
+
+
+class Source(BaseModel):
+    """
+    Represents a source from which articles can be collected.
+    
+    Attributes:
+        id: Unique identifier for the source (UUID).
+        name: Display name of the source.
+        url: List of URLs associated with the source (e.g., homepage, RSS feed).
+        content_location: Div location of the content of articles on this source.
+        has_rss: Determines the availability of an rss feed from this source.
+    """
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique identifier for the source (UUID)."
+    )
+    name: str = Field(
+        ...,
+        description="Display name of the source (e.g., 'Daily Star Lebanon')."
+    )
+    url: str = Field(
+        ...,
+        description="URL (homepage or RSS feed) associated with this source."
+    )
+    content_location: tuple = Field(
+        ...,
+        description="Div location of the content of articles on this source."
+    )
+    has_rss: bool = Field(
+        ...,
+        description="Determines the availability of an rss feed from this source."
+    )
+
+class User(BaseModel):
+    """
+    Represents a user in the system.
+    
+    Attributes:
+        id: Unique identifier for the user.
+        email: Email address used for contact and authentication.
+        preferences: User preferences, including source subscriptions and language.
+    """
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique identifier for the user (UUID)."
+    )
+    email: EmailStr = Field(
+        ...,
+        description="User's email address."
+    )
+    preferences: UserPreferences = Field(
+        default_factory=UserPreferences,
+        description="User's saved preferences (sources followed, language)."
     )
 #No implementation for it yet
 class AggregatedStory(BaseModel):
