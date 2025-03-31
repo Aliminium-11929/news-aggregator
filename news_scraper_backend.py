@@ -338,8 +338,8 @@ def start(lang:str, source:list[str], article_count:int, refresh_timestamp:int):
         feed_Thread.start()
     
     
-# Testing:
-sourceArr=["almanar","aljadeed","mtv"]
-language = "arabic"
-stop_event = threading.Event()
-start(language,sourceArr,30,180)
+# # Testing:
+# sourceArr=["almanar","aljadeed","mtv"]
+# language = "arabic"
+# stop_event = threading.Event()
+# start(language,sourceArr,30,180)
