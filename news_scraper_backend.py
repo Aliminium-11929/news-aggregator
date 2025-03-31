@@ -254,13 +254,13 @@ def timer_trigger(myTimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Python timer trigger function executed.')
-    # Testing:
-    sourceArr = {}
-    #UUID may be random and may be hard coded as here
-    sourceArr[uuid.UUID(int=0)] = Source(id = uuid.UUID(int=0), name = "almanar", url = "https://almanar.com.lb/rss", content_location=("div","article-content"),has_rss=True)
-    sourceArr[uuid.UUID(int=1)] = Source(id = uuid.UUID(int=1),name = "aljadeed", url = "https://www.aljadeed.tv/Rss/latest-news", content_location=("div","LongDesc text-title-9"),has_rss=True)
-    sourceArr[uuid.UUID(int=2)] = Source(id = uuid.UUID(int=2),name = "mtv", url = "https://vodapi.mtv.com.lb/api/Service/GetArticlesByNewsSectionID?id=1&start=0&end=20&keywordId=-1&onlyWithSource=false&type=&authorId=-1&platform=&isLatin=", content_location=("p","_pragraphs"),has_rss=False)
-    preference = UserPreferences(source_ids = [uuid.UUID(int =0),uuid.UUID(int =1),uuid.UUID(int =2)], language = Language.ARABIC)
+    # # Testing:
+    # sourceArr = {}
+    # #UUID may be random and may be hard coded as here
+    # sourceArr[uuid.UUID(int=0)] = Source(id = uuid.UUID(int=0), name = "almanar", url = "https://almanar.com.lb/rss", content_location=("div","article-content"),has_rss=True)
+    # sourceArr[uuid.UUID(int=1)] = Source(id = uuid.UUID(int=1),name = "aljadeed", url = "https://www.aljadeed.tv/Rss/latest-news", content_location=("div","LongDesc text-title-9"),has_rss=True)
+    # sourceArr[uuid.UUID(int=2)] = Source(id = uuid.UUID(int=2),name = "mtv", url = "https://vodapi.mtv.com.lb/api/Service/GetArticlesByNewsSectionID?id=1&start=0&end=20&keywordId=-1&onlyWithSource=false&type=&authorId=-1&platform=&isLatin=", content_location=("p","_pragraphs"),has_rss=False)
+    # preference = UserPreferences(source_ids = [uuid.UUID(int =0),uuid.UUID(int =1),uuid.UUID(int =2)], language = Language.ARABIC)
 
-    user = User(id = uuid.uuid4(),email = "email@123.com", preferences=preference)
-    start(user,15,180, sourceArr)
+    # user = User(id = uuid.uuid4(),email = "email@123.com", preferences=preference)
+    # start(user,15,180, sourceArr)
